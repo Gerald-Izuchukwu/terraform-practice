@@ -1,36 +1,77 @@
-terraform {
-  required_providers {
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "~> 3.0.1"
+provider "aws" {
+    region = "us-east-1"
+}
+variable avail_zone {}
+variable vpc_cidr_block{}
+variable subnet_cidr_block{}
+variable env_prefix{}
+variable my_ip_address{}
+
+# creating a vpc
+resource "aws_vpc" "myapp-vpc"{
+    cidr_block = var.vpc_cidr_block
+    tags = {
+        Name: "${var.env_prefix}-vpc"
     }
-  }
 }
 
-provider "docker"{}
-
-variable "image_ports" {
-  type        = object({
-    internal = number
-    external = number 
-  })
-  description = "ports"
+# creating a subnet
+resource "aws_subnet" "myapp-subnet-1"{
+    vpc_id = aws_vpc.myapp-vpc.id
+    cidr_block = var.subnet_cidr_block
+    availability_zone = var.avail_zone
+    tags = {
+        Name : "${var.env_prefix}-subnet-1"
+    }
 }
 
-
-
-resource "docker_image" "nginx"{
-    name = "nginx"
-    keep_locally = false
+# creating a route-table
+resource "aws_route_table" "myapp-routetable"{
+    vpc_id = aws_vpc.myapp-vpc.id
+    route{
+        cidr_block = "0.0.0.0/0"
+        gateway_id = aws_internet_gateway.myapp-igw.id
+    }
+    tags={
+        Name: "${var.env_prefix}-rtb"
+    }
 }
 
-resource "docker_container" "nginx"{
-    image = docker_image.nginx.image_id
-    name = "tutorial"
-
-    ports {
-    internal = 80
-    external = 8000
-}
+# creating an IGW
+resource "aws_internet_gateway" "myapp-igw"{
+    vpc_id = aws_vpc.myapp-vpc.id
+    tags={
+        Name: "${var.env_prefix}-igw"
+    }
 }
 
+# creating security group
+resource "aws_security_group" "myapp-sg" {
+    name = "myapp-sg"
+    vpc_id = aws_vpc.myapp-vpc.id
+    ingress{
+        from_port = 22
+        to_port = 22
+        protocol = "tcp"
+        cidr_blocks = [var.my_ip_address]
+    }
+
+    ingress {
+        from_port = 8080
+        to_port = 8080
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    egress {
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+        prefix_list_ids = []
+    }
+    
+    tags = {
+        Name = "${var.env_prefix}-sg"
+    }
+}
