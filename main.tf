@@ -10,12 +10,15 @@ variable instance_type{}
 variable my_public_key {}
 variable image_id {}
 variable key_pair_id{}
+
 # creating a vpc
 resource "aws_vpc" "myapp-vpc"{
     cidr_block = var.vpc_cidr_block
     tags = {
         Name: "${var.env_prefix}-vpc"
     }
+    enable_dns_support   = true
+    enable_dns_hostnames = true
 }
 
 # creating a subnet
@@ -26,6 +29,8 @@ resource "aws_subnet" "myapp-subnet-1"{
     tags = {
         Name : "${var.env_prefix}-subnet-1"
     }
+    map_public_ip_on_launch = true
+
 }
 
 # creating a route-table
@@ -38,6 +43,7 @@ resource "aws_route_table" "myapp-routetable"{
     tags={
         Name: "${var.env_prefix}-rtb"
     }
+    
 }
 
 # creating an IGW
@@ -46,6 +52,13 @@ resource "aws_internet_gateway" "myapp-igw"{
     tags={
         Name: "${var.env_prefix}-igw"
     }
+}
+
+resource "aws_route_table_association" "public_route_table_association" {
+#   count          = length(var.availability_zones)
+#   subnet_id      = element(aws_subnet.public_subnets.*.id, count.index)
+  subnet_id      = aws_subnet.myapp-subnet-1.id
+  route_table_id = aws_route_table.myapp-routetable.id
 }
 
 # creating security group
