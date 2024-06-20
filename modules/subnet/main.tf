@@ -20,6 +20,11 @@ resource "aws_route_table" "myapp-routetable"{
     }
 }
 
+resource "aws_route_table_association" "public_route_table_association"{
+    subnet_id = aws_subnet.myapp-subnet-1.id
+    route_table_id = aws_route_table.myapp-routetable.id
+
+}
 # creating an IGW
 resource "aws_internet_gateway" "myapp-igw"{
     vpc_id = var.vpc_id
