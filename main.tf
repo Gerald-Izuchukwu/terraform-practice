@@ -7,64 +7,74 @@ variable subnet_cidr_block{}
 variable env_prefix{}
 variable my_ip_address{}
 variable instance_type{}
-variable my_public_key {}
+variable public_key {}
 variable image_id {}
 variable key_pair_id{}
 
 # creating a vpc
-resource "aws_vpc" "myapp-vpc"{
+resource "aws_vpc" "this"{
     cidr_block = var.vpc_cidr_block
-    tags = {
-        Name: "${var.env_prefix}-vpc"
-    }
     enable_dns_support   = true
     enable_dns_hostnames = true
+
+    tags = {
+        Name: "${var.env_prefix}_vpc"
+    }
 }
 
 # creating a subnet
-resource "aws_subnet" "myapp-subnet-1"{
-    vpc_id = aws_vpc.myapp-vpc.id
+resource "aws_subnet" "public"{
+    count = 1
+
+    vpc_id = aws_vpc.this.id
     cidr_block = var.subnet_cidr_block
     availability_zone = var.avail_zone
-    tags = {
-        Name : "${var.env_prefix}-subnet-1"
-    }
     map_public_ip_on_launch = true
+
+    tags = {
+        Name : "${var.env_prefix}_subnet-1"
+    }
 
 }
 
 # creating a route-table
-resource "aws_route_table" "myapp-routetable"{
-    vpc_id = aws_vpc.myapp-vpc.id
+resource "aws_route_table" "public"{
+    count = 1
+
+    vpc_id = aws_vpc.this.id
     route{
         cidr_block = "0.0.0.0/0"
-        gateway_id = aws_internet_gateway.myapp-igw.id
+        gateway_id = aws_internet_gateway.this[0].id
     }
+
     tags={
-        Name: "${var.env_prefix}-rtb"
+        Name: "${var.env_prefix}_rtb"
     }
     
 }
 
 # creating an IGW
-resource "aws_internet_gateway" "myapp-igw"{
-    vpc_id = aws_vpc.myapp-vpc.id
+resource "aws_internet_gateway" "this"{
+    count = 1
+
+    vpc_id = aws_vpc.this.id
+
     tags={
-        Name: "${var.env_prefix}-igw"
+        Name: "${var.env_prefix}_igw"
     }
 }
 
 resource "aws_route_table_association" "public_route_table_association" {
 #   count          = length(var.availability_zones)
 #   subnet_id      = element(aws_subnet.public_subnets.*.id, count.index)
-  subnet_id      = aws_subnet.myapp-subnet-1.id
-  route_table_id = aws_route_table.myapp-routetable.id
+  subnet_id      = aws_subnet.public[0].id
+  route_table_id = aws_route_table.public[0].id
 }
 
 # creating security group
-resource "aws_security_group" "myapp-sg" {
+resource "aws_security_group" "this" {
     name = "myapp-sg"
-    vpc_id = aws_vpc.myapp-vpc.id
+    vpc_id = aws_vpc.this.id
     ingress{
         from_port = 22
         to_port = 22
@@ -88,7 +98,7 @@ resource "aws_security_group" "myapp-sg" {
     }
     
     tags = {
-        Name = "${var.env_prefix}-sg"
+        Name = "${var.env_prefix}_sg"
     }
 }
 
@@ -106,31 +116,34 @@ resource "aws_security_group" "myapp-sg" {
 #     }
 # }
 
-data "aws_key_pair" "ssh-key"{
-    key_pair_id = var.key_pair_id
-    # key_name = "test_key"
-    # public_key = file(var.my_public_key)
+resource "aws_key_pair" "ssh_key"{
+    # key_pair_id = var.key_pair_id
+    key_name = "test_key_id_rsa"
+    public_key = file(var.public_key)
 }
 
 output "key_pair_name"{
-    value = data.aws_key_pair.ssh-key.key_name
+    value = aws_key_pair.ssh_key.key_name
 }
 
-resource "aws_instance" "myapp-server"{
+resource "aws_instance" "this"{
+    count = 1
+
     ami = var.image_id
     instance_type = var.instance_type
-    subnet_id = aws_subnet.myapp-subnet-1.id
-    vpc_security_group_ids = [aws_security_group.myapp-sg.id]
+    subnet_id = aws_subnet.public[0].id
+    vpc_security_group_ids = [aws_security_group.this.id]
     availability_zone = var.avail_zone
     associate_public_ip_address = true
     # key_name = aws_key_pair.ssh-key.key_name
-    key_name = data.aws_key_pair.ssh-key.key_name
+    key_name = aws_key_pair.ssh_key.key_name
     user_data = file("entry_script.sh")
+
     tags = {
-        Name = "${var.env_prefix}-server"
+        Name = "${var.env_prefix}_server"
     }
 }
 
 output "ec2_public_ip"{
-    value = aws_instance.myapp-server.public_ip
+    value = aws_instance.this[0].public_ip
 }
